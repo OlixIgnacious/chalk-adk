@@ -68,11 +68,22 @@ def run_lesson_pipeline(
     output_dir: Optional[str] = None,
     provider: str = "gemini",
     auto_approve: bool = False,
+    page_range: Optional[str] = None,
+    allow_suspicious: bool = False,
 ) -> LessonSpec:
     """Executes the full pipeline: Ingest -> Curate -> Write -> Verify -> Human Gate."""
     print(f"📖 Step 1/4: Ingesting source document '{source_path}'...")
-    source_doc = load_source_document(source_path)
-    print(f"   Loaded {source_doc['word_count']} words ({source_doc['line_count']} lines).")
+    source_doc = load_source_document(
+        source_path,
+        page_range=page_range,
+        allow_suspicious=allow_suspicious,
+    )
+    print(
+        f"   Loaded {source_doc['word_count']} words (~{source_doc['estimated_tokens']:,} tokens, "
+        f"{source_doc['line_count']} lines)."
+    )
+    if source_doc.get("security_warnings"):
+        print(f"   🛡️ Guardrails flagged {len(source_doc['security_warnings'])} security notice(s).")
 
     print(f"🧠 Step 2/4: Curating curriculum outline with CuratorAgent...")
     outline = run_curator(source_doc, provider=provider)

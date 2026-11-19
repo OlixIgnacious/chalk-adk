@@ -83,6 +83,17 @@ def main():
         action="store_true",
         help="Skip Kokoro TTS generation (player will use Web Speech Synthesizer fallback)",
     )
+    create_parser.add_argument(
+        "--page-range",
+        type=str,
+        default=None,
+        help="Specific PDF page range to extract (e.g. '1-20' or '15-30') for large documents",
+    )
+    create_parser.add_argument(
+        "--allow-suspicious",
+        action="store_true",
+        help="Bypass security warnings for PDFs containing embedded action scripts or attachments",
+    )
 
     # Command: preview
     preview_parser = subparsers.add_parser("preview", help="Preview a compiled lesson in your default browser")
@@ -125,6 +136,8 @@ def main():
             output_dir=args.output_dir,
             provider=args.provider,
             auto_approve=args.auto_approve,
+            page_range=args.page_range,
+            allow_suspicious=args.allow_suspicious,
         )
 
         # 2. Compile to HTML & Audio
