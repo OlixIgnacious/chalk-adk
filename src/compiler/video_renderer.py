@@ -79,10 +79,12 @@ def prepare_hyperframes_project(segment: LessonSegment, output_dir: Path) -> Pat
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Determine HTML & GSAP source
+    import re
     if segment.hyperframe:
         scene_html = segment.hyperframe.html
         custom_css = segment.hyperframe.css or ""
-        gsap_script = segment.hyperframe.gsap_timeline
+        raw_script = segment.hyperframe.gsap_timeline or ""
+        gsap_script = re.sub(r"\b(const|let|var)\s+tl\s*=\s*gsap\.timeline\([^)]*\);?", "", raw_script)
     else:
         # Fallback to visual block
         v = segment.visuals[0] if segment.visuals else None

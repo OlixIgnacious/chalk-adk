@@ -130,3 +130,4 @@ Great job working through this lesson! You can tweak any of the code cells above
 
     print(f"📓 Companion Notebook generated: {output_path.name}")
     return output_path
+

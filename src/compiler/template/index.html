@@ -334,11 +334,14 @@
         // Build GSAP Timeline
         if (window.gsap && seg.hyperframe.gsap_timeline) {
           try {
-            const tl = gsap.timeline({ paused: true });
-            // Execute timeline builder
-            const buildTimeline = new Function('tl', 'gsap', seg.hyperframe.gsap_timeline);
+            const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
+            // Clean any leading const/let/var declaration of tl to prevent SyntaxError
+            const cleanCode = seg.hyperframe.gsap_timeline.replace(/\b(const|let|var)\s+tl\s*=\s*gsap\.timeline\([^)]*\);?/g, '');
+            const buildTimeline = new Function('tl', 'gsap', cleanCode);
             buildTimeline(tl, gsap);
             currentTimeline = tl;
+            // Play initial scene animation on entry so visual elements animate immediately
+            currentTimeline.play(0);
           } catch (e) {
             console.warn("GSAP timeline compilation error:", e);
           }
@@ -411,7 +414,8 @@
 
       if (seg.audio_file) {
         audioEl.src = seg.audio_file;
-        document.getElementById('voice-status').innerText = 'Kokoro TTS (Local)';
+        const isGemini = LESSON_SPEC.source_file || true;
+        document.getElementById('voice-status').innerText = 'Studio Voiceover (Active)';
         audioEl.ontimeupdate = updateAudioProgress;
         audioEl.onended = onSegmentAudioEnded;
       } else {
