@@ -2,6 +2,7 @@ from src.schemas.lesson import (
     CheckpointOption,
     CheckpointQuestion,
     CurriculumOutline,
+    HyperFrameScene,
     LessonSegment,
     LessonSpec,
     OutlineUnit,
@@ -14,6 +15,7 @@ from src.schemas.lesson import (
 __all__ = [
     "SourceReference",
     "VisualDirective",
+    "HyperFrameScene",
     "CheckpointOption",
     "CheckpointQuestion",
     "LessonSegment",
@@ -23,4 +25,3 @@ __all__ = [
     "VerificationReport",
     "LessonSpec",
 ]
-

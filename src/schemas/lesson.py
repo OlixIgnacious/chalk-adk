@@ -1,4 +1,4 @@
-"""Pydantic schemas defining the data contract for Chalk-ADK Interactive Lessons.
+"""Pydantic schemas defining the data contract for Chalk-ADK Interactive Lessons and HyperFrames scenes.
 
 Ensures strict typing, structured LLM generation, and deterministic verification.
 """
@@ -28,6 +28,20 @@ class VisualDirective(BaseModel):
     highlight_lines: List[int] = Field(default_factory=list, description="Lines to emphasize/glow")
 
 
+class HyperFrameScene(BaseModel):
+    """Animated scene composition for HyperFrames (HTML + CSS + GSAP timeline)."""
+    html: str = Field(
+        description="Semantic HTML markup for the 16:9 scene (macOS terminal window, animated cards, flow nodes)"
+    )
+    css: Optional[str] = Field(
+        default="",
+        description="Optional scoped CSS rules or utility styling"
+    )
+    gsap_timeline: str = Field(
+        description="JavaScript GSAP animation timeline script (e.g., tl.from('#code-box', {opacity: 0, y: 20, duration: 1}).to('#line-1', {backgroundColor: '...', duration: 0.5}))"
+    )
+
+
 class CheckpointOption(BaseModel):
     """An option in an interactive checkpoint question."""
     id: str = Field(description="Letter identifier, e.g., 'A', 'B', 'C', 'D'")
@@ -54,15 +68,20 @@ class CheckpointQuestion(BaseModel):
 
 
 class LessonSegment(BaseModel):
-    """A bite-sized learning segment with spoken narration, visuals, and a checkpoint."""
+    """A bite-sized learning segment with spoken narration, HyperFrames scene, and a checkpoint."""
     id: str = Field(description="Segment identifier, e.g., 'seg-1'")
     order: int = Field(description="Sequence position (1-based)")
     title: str = Field(description="Segment title (e.g. 'Understanding Attention Weights')")
     narration: str = Field(
         description="Conversational, precise spoken narration text for Kokoro TTS (approx. 100-180 words, ~45-75s)"
     )
+    hyperframe: Optional[HyperFrameScene] = Field(
+        default=None,
+        description="Animated HyperFrames scene composition with HTML and GSAP timeline"
+    )
     visuals: List[VisualDirective] = Field(
-        description="Visual directives shown simultaneously with this segment's narration"
+        default_factory=list,
+        description="Fallback visual directives (markdown, code, diagram)"
     )
     checkpoint: CheckpointQuestion = Field(
         description="Mandatory comprehension checkpoint before advancing to the next segment"
@@ -116,7 +135,7 @@ class VerificationReport(BaseModel):
 
 
 class LessonSpec(BaseModel):
-    """Full specification for compiling an interactive lesson."""
+    """Full specification for compiling an interactive lesson and video scenes."""
     lesson_id: str = Field(description="Kebab-case unique id (e.g., 'attention-mechanism-101')")
     title: str = Field(description="Main lesson title")
     subtitle: str = Field(description="Short engaging subtitle")
@@ -129,4 +148,3 @@ class LessonSpec(BaseModel):
         default=None,
         description="Verification audit from GroundingAgent"
     )
-
