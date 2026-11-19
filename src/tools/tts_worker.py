@@ -1,8 +1,4 @@
-"""Local TTS generator using Kokoro-ONNX v1.0 with seamless multi-voice blending.
-
-Supports weighted style interpolation:
-e.g., "af_heart:0.7,af_bella:0.3" (70% Heart + 30% Bella)
-"""
+"""TTS Generator supporting Google Gemini 3.8 Flash TTS and local Kokoro-ONNX."""
 
 import json
 import os
@@ -10,9 +6,10 @@ import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-DEFAULT_VOICE_ID = "af_heart:0.7,af_bella:0.3"
+DEFAULT_KOKORO_VOICE = "af_heart:0.7,af_bella:0.3"
+DEFAULT_GEMINI_VOICE = "Kore"
 
-# Release URLs for Kokoro v1.0 (includes af_heart, af_bella, etc.)
+# Release URLs for Kokoro v1.0
 KOKORO_V1_MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
 KOKORO_V1_VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
 
@@ -22,13 +19,11 @@ def get_model_paths() -> tuple[Path, Path]:
     cache_dir = Path.home() / ".cache" / "kokoro"
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    # Prefer v1.0 weights
     v1_model = cache_dir / "kokoro-v1.0.onnx"
     v1_voices = cache_dir / "voices-v1.0.bin"
     if v1_model.exists() and v1_voices.exists():
         return v1_model, v1_voices
 
-    # Fallback to v0.19 if already downloaded
     v0_model = cache_dir / "kokoro-v0_19.onnx"
     v0_voices = cache_dir / "voices.bin"
     if v0_model.exists() and v0_voices.exists():
@@ -74,13 +69,7 @@ def is_kokoro_available() -> bool:
 
 
 def parse_voice_blend(voice_id: str) -> List[Tuple[str, float]]:
-    """Parses voice blend string into (voice_name, weight) tuples.
-
-    Examples:
-        "af_heart:0.7,af_bella:0.3" -> [("af_heart", 0.7), ("af_bella", 0.3)]
-        "af_sarah"                   -> [("af_sarah", 1.0)]
-        "af_heart:2+af_bella:1"     -> [("af_heart", 2.0), ("af_bella", 1.0)]
-    """
+    """Parses voice blend string into (voice_name, weight) tuples."""
     clean_str = voice_id.replace("+", ",").strip()
     parts = [p.strip() for p in clean_str.split(",") if p.strip()]
     result = []
@@ -99,25 +88,68 @@ def parse_voice_blend(voice_id: str) -> List[Tuple[str, float]]:
     return result or [("af_heart", 0.7), ("af_bella", 0.3)]
 
 
-def generate_audio_for_segment(
+def generate_gemini_tts(
     narration: str,
     output_wav_path: str,
-    voice_id: str = DEFAULT_VOICE_ID,
+    voice_name: str = DEFAULT_GEMINI_VOICE,
+    api_key: Optional[str] = None,
+) -> Optional[str]:
+    """Generates studio voice narration using Google's gemini-3.8-flash-tts model."""
+    try:
+        from google import genai
+        from google.genai import types
+
+        key = api_key or os.getenv("GEMINI_API_KEY")
+        if not key:
+            print("⚠️ Cannot use gemini-3.8-flash-tts: GEMINI_API_KEY is not set.")
+            return None
+
+        # Gemini audio generation currently operates under v1beta
+        client = genai.Client(api_key=key, http_options={"api_version": "v1beta"})
+
+        config = types.GenerateContentConfig(
+            response_modalities=["AUDIO"],
+            speech_config={
+                "voice_config": {
+                    "prebuilt_voice_config": {
+                        "voice_name": voice_name
+                    }
+                }
+            },
+        )
+
+        print(f"🎙️ [Gemini TTS] Synthesizing segment with gemini-3.8-flash-tts (Voice: '{voice_name}')...")
+        response = client.models.generate_content(
+            model="gemini-3.8-flash-tts",
+            contents=narration,
+            config=config,
+        )
+
+        candidate = response.candidates[0]
+        part = candidate.content.parts[0]
+        audio_bytes = part.inline_data.data
+
+        out_path = Path(output_wav_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "wb") as f:
+            f.write(audio_bytes)
+
+        print(f"   ✓ Generated with Gemini TTS: {out_path.name} ({len(audio_bytes) / 1024:.1f} KB)")
+        return str(out_path)
+
+    except Exception as e:
+        print(f"⚠️ Gemini TTS generation error: {e}")
+        return None
+
+
+def generate_kokoro_tts(
+    narration: str,
+    output_wav_path: str,
+    voice_id: str = DEFAULT_KOKORO_VOICE,
     speed: float = 1.0,
     auto_download: bool = True,
 ) -> Optional[str]:
-    """Generates audio for a narration segment using Kokoro-ONNX and NumPy voice blending.
-
-    Args:
-        narration: Spoken text
-        output_wav_path: Target .wav path
-        voice_id: Name or blend formula (e.g. "af_heart:0.7,af_bella:0.3")
-        speed: Speech rate multiplier (1.0 = normal)
-        auto_download: Download model weights if missing
-
-    Returns:
-        Path to output WAV, or None if Kokoro is unavailable.
-    """
+    """Generates audio for a narration segment using Kokoro-ONNX and NumPy voice blending."""
     try:
         import numpy as np
 
@@ -138,13 +170,10 @@ def generate_audio_for_segment(
             else:
                 return None
 
-        # Load Kokoro engine
         kokoro = Kokoro(str(model_path), str(voices_path))
         available_voices = kokoro.get_voices()
-
         blend_specs = parse_voice_blend(voice_id)
 
-        # Compute blended style vector via linear interpolation
         style_vectors = []
         total_weight = 0.0
 
@@ -157,7 +186,6 @@ def generate_audio_for_segment(
                 print(f"⚠️ Voice '{name}' not found. Available voices: {available_voices[:5]}...")
 
         if not style_vectors:
-            # Fallback to first available
             first = available_voices[0]
             blended_style = kokoro.get_voice_style(first)
         else:
@@ -175,9 +203,36 @@ def generate_audio_for_segment(
         out_path.parent.mkdir(parents=True, exist_ok=True)
         sf.write(str(out_path), samples, sample_rate)
         duration = len(samples) / sample_rate
-        print(f"   ✓ Generated: {out_path.name} ({duration:.1f}s, {sample_rate}Hz)")
+        print(f"   ✓ Generated with Kokoro: {out_path.name} ({duration:.1f}s, {sample_rate}Hz)")
         return str(out_path)
 
     except Exception as e:
-        print(f"⚠️ TTS Generation failed or skipped: {e}")
+        print(f"⚠️ Kokoro TTS generation error: {e}")
         return None
+
+
+def generate_audio_for_segment(
+    narration: str,
+    output_wav_path: str,
+    provider: str = "gemini",
+    voice_id: Optional[str] = None,
+    speed: float = 1.0,
+) -> Optional[str]:
+    """Unified entry point for segment audio generation.
+
+    Args:
+        narration: Spoken text
+        output_wav_path: Destination .wav file
+        provider: 'gemini' (uses gemini-3.8-flash-tts) or 'kokoro' (local CPU engine)
+        voice_id: Voice name (e.g. 'Kore', 'Puck' for Gemini; 'af_heart:0.7,af_bella:0.3' for Kokoro)
+    """
+    if provider == "gemini":
+        voice = voice_id or DEFAULT_GEMINI_VOICE
+        res = generate_gemini_tts(narration, output_wav_path, voice_name=voice)
+        if res:
+            return res
+        print("   ⚠️ Gemini TTS fallback -> trying local Kokoro TTS...")
+
+    # Kokoro (either primary or fallback)
+    voice = voice_id if (voice_id and provider == "kokoro") else DEFAULT_KOKORO_VOICE
+    return generate_kokoro_tts(narration, output_wav_path, voice_id=voice, speed=speed)

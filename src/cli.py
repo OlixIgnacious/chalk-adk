@@ -79,9 +79,22 @@ def main():
         help="Skip the human review gate and automatically compile",
     )
     create_parser.add_argument(
+        "--tts-provider",
+        type=str,
+        default="gemini",
+        choices=["gemini", "kokoro"],
+        help="TTS audio provider: 'gemini' (Google Gemini 3.8 Flash TTS) or 'kokoro' (local ONNX, default: gemini)",
+    )
+    create_parser.add_argument(
+        "--voice",
+        type=str,
+        default=None,
+        help="TTS voice name (e.g. 'Kore', 'Puck', 'Fenrir' for Gemini; 'af_heart:0.7,af_bella:0.3' for Kokoro)",
+    )
+    create_parser.add_argument(
         "--skip-tts",
         action="store_true",
-        help="Skip Kokoro TTS generation (player will use Web Speech Synthesizer fallback)",
+        help="Skip TTS audio generation (player will use Web Speech Synthesizer fallback)",
     )
     create_parser.add_argument(
         "--page-range",
@@ -164,6 +177,8 @@ def main():
             spec=spec,
             output_root=args.output_dir,
             skip_tts=args.skip_tts,
+            tts_provider=args.tts_provider,
+            tts_voice=args.voice,
         )
         if args.notebook:
             nb_path = html_path.parent / "notebook.ipynb"

@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Optional
 from jinja2 import Template
 
 from src.config import config
@@ -9,10 +10,16 @@ from src.schemas.lesson import LessonSpec
 from src.tools.tts_worker import generate_audio_for_segment, is_kokoro_available
 
 
-def compile_lesson(spec: LessonSpec, output_root: str = "./dist", skip_tts: bool = False) -> Path:
+def compile_lesson(
+    spec: LessonSpec,
+    output_root: str = "./dist",
+    skip_tts: bool = False,
+    tts_provider: Optional[str] = None,
+    tts_voice: Optional[str] = None,
+) -> Path:
     """Compiles the LessonSpec into a standalone interactive web application.
 
-    1. (Optional) Generates segment audio using Kokoro TTS into dist/<lesson_id>/audio/
+    1. (Optional) Generates segment audio using Gemini 3.8 Flash TTS or Kokoro into dist/<lesson_id>/audio/
     2. Injects LessonSpec into the HTML5 interactive lesson template.
     3. Emits self-contained `lesson.html`.
 
@@ -23,17 +30,21 @@ def compile_lesson(spec: LessonSpec, output_root: str = "./dist", skip_tts: bool
     audio_dir = lesson_dir / "audio"
     lesson_dir.mkdir(parents=True, exist_ok=True)
 
+    provider = tts_provider or config.tts_provider
+    voice = tts_voice or (config.tts_voice_id if provider == "gemini" else config.kokoro_voice_id)
+
     # 1. Audio generation
     if not skip_tts:
         audio_dir.mkdir(exist_ok=True)
-        print(f"🎙️ Generating voiceover audio with Kokoro-ONNX (Voice: '{config.tts_voice_id}')...")
+        print(f"🎙️ Generating voiceover audio via {provider.upper()} TTS (Voice: '{voice}')...")
         for seg in spec.segments:
             wav_name = f"seg-{seg.order}.wav"
             target_wav = audio_dir / wav_name
             generated_path = generate_audio_for_segment(
                 seg.narration,
                 str(target_wav),
-                voice_id=config.tts_voice_id,
+                provider=provider,
+                voice_id=voice,
             )
             if generated_path:
                 seg.audio_file = f"./audio/{wav_name}"

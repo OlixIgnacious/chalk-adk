@@ -62,6 +62,13 @@ def check_chrome() -> Tuple[bool, str]:
     return False, "Google Chrome / Chromium not found. Required for HyperFrames video rendering."
 
 
+def check_gemini_tts() -> Tuple[bool, str]:
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if gemini_key and not gemini_key.startswith("your_"):
+        return True, "gemini-3.8-flash-tts cloud studio engine ready (Voice: Kore, Puck, etc.)"
+    return False, "GEMINI_API_KEY not configured for gemini-3.8-flash-tts"
+
+
 def check_kokoro() -> Tuple[bool, str]:
     cache_dir = Path.home() / ".cache" / "kokoro"
     v1_model = cache_dir / "kokoro-v1.0.onnx"
@@ -112,6 +119,7 @@ def run_doctor() -> bool:
         ("Node.js & NPX", *check_node_npx()),
         ("FFmpeg / ffprobe", *check_ffmpeg()),
         ("Chrome / Chromium", *check_chrome()),
+        ("Gemini 3.8 Flash TTS", *check_gemini_tts()),
         ("Kokoro TTS Engine", *check_kokoro()),
     ]
 
