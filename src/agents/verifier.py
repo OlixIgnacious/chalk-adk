@@ -1,11 +1,7 @@
 """GroundingAgent: Audits the generated LessonSpec against source material for factual fidelity."""
 
-import json
-from google import genai
-from google.genai import types
-from src.config import config, pace_request, get_agent_model
+from src.config import generate_structured_output
 from src.schemas.lesson import LessonSpec, VerificationReport
-
 
 VERIFIER_PROMPT = """You are a rigorous factual auditor and pedagogical reviewer (equivalent to chalk-grounding and chalk-factcheck).
 Your job is to audit the generated LessonSpec against the original source document.
@@ -32,11 +28,6 @@ def run_verifier(
     provider: str = "gemini",
 ) -> VerificationReport:
     """Runs the GroundingAgent audit on the LessonSpec."""
-    pace_request()
-
-    client = genai.Client(api_key=config.gemini_api_key)
-    model = get_agent_model(role="verifier", provider=provider)
-
     prompt = f"""{VERIFIER_PROMPT}
 
 === ORIGINAL SOURCE DOCUMENT ===
@@ -48,18 +39,13 @@ def run_verifier(
 Perform a thorough audit and return the VerificationReport according to the schema.
 """
 
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=VerificationReport,
-            temperature=0.1,
-        ),
+    data = generate_structured_output(
+        prompt=prompt,
+        response_schema=VerificationReport,
+        role="verifier",
+        provider=provider,
+        temperature=0.1,
     )
-
-    data = json.loads(response.text)
     report = VerificationReport.model_validate(data)
     lesson_spec.verification_report = report
     return report
-

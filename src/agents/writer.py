@@ -1,11 +1,7 @@
 """LessonWriterAgent: Drafts narrated scripts, visual directives, and interactive checkpoints."""
 
-import json
-from google import genai
-from google.genai import types
-from src.config import config, pace_request, get_agent_model
+from src.config import generate_structured_output
 from src.schemas.lesson import CurriculumOutline, LessonSpec
-
 
 WRITER_PROMPT = """You are an elite educational content creator and interactive lesson author.
 Your goal is to turn the provided source document and curriculum outline into a complete, high-engagement interactive lesson specification.
@@ -35,11 +31,6 @@ def run_writer(
     provider: str = "gemini",
 ) -> LessonSpec:
     """Runs the LessonWriter stage to generate the full LessonSpec."""
-    pace_request()
-
-    client = genai.Client(api_key=config.gemini_api_key)
-    model = get_agent_model(role="writer", provider=provider)
-
     prompt = f"""{WRITER_PROMPT}
 
 Source Document: {source_doc['file_name']}
@@ -55,18 +46,13 @@ Generate the complete, verified LessonSpec adhering strictly to the response sch
 Ensure each segment in the outline is developed into a fully scripted LessonSegment.
 """
 
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=LessonSpec,
-            temperature=0.4,
-        ),
+    data = generate_structured_output(
+        prompt=prompt,
+        response_schema=LessonSpec,
+        role="writer",
+        provider=provider,
+        temperature=0.4,
     )
-
-    data = json.loads(response.text)
     lesson_spec = LessonSpec.model_validate(data)
     lesson_spec.source_file = source_doc["file_path"]
     return lesson_spec
-

@@ -1,11 +1,7 @@
 """CuratorAgent: Ingests source material and produces a structured pedagogical outline."""
 
-import json
-from google import genai
-from google.genai import types
-from src.config import config, pace_request, get_agent_model
+from src.config import generate_structured_output
 from src.schemas.lesson import CurriculumOutline
-
 
 CURATOR_PROMPT = """You are an expert pedagogical curriculum designer for interactive, bite-sized lessons.
 Your job is to read the provided source document and distill it into a clean, 3 to 5 unit learning outline.
@@ -20,11 +16,6 @@ Pedagogical Rules:
 
 def run_curator(source_doc: dict, provider: str = "gemini") -> CurriculumOutline:
     """Runs the Curator stage to produce a CurriculumOutline from the source document."""
-    pace_request()
-
-    client = genai.Client(api_key=config.gemini_api_key)
-    model = get_agent_model(role="curator", provider=provider)
-
     prompt = f"""{CURATOR_PROMPT}
 
 Source Document: {source_doc['file_name']}
@@ -37,16 +28,11 @@ Word Count: {source_doc['word_count']}
 Generate the structured CurriculumOutline according to the schema.
 """
 
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=CurriculumOutline,
-            temperature=0.3,
-        ),
+    data = generate_structured_output(
+        prompt=prompt,
+        response_schema=CurriculumOutline,
+        role="curator",
+        provider=provider,
+        temperature=0.3,
     )
-
-    data = json.loads(response.text)
     return CurriculumOutline.model_validate(data)
-
