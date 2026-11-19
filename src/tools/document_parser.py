@@ -1,9 +1,90 @@
-"""Document parser with security guardrails, malware scanning, and page-range budgeting."""
+"""Document parser with security guardrails, malware scanning, page budgeting, and EPUB support."""
 
+import re
+import xml.etree.ElementTree as ET
+import zipfile
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from src.tools.guardrails import DocumentGuardrails, SecurityViolation
+
+
+class HTMLTextExtractor(HTMLParser):
+    """Fast, safe in-memory HTML tag stripper for EPUB chapters."""
+    def __init__(self):
+        super().__init__()
+        self.text_parts = []
+
+    def handle_data(self, data):
+        self.text_parts.append(data)
+
+    def get_text(self) -> str:
+        return " ".join("".join(self.text_parts).split())
+
+
+def extract_epub_content(epub_path: Path, target_chapter: Optional[int] = None) -> str:
+    """Extracts sequential chapter text from an unencrypted EPUB file."""
+    with zipfile.ZipFile(str(epub_path), "r") as z:
+        # Locate .opf package file
+        try:
+            container_xml = z.read("META-INF/container.xml")
+            container_root = ET.fromstring(container_xml)
+            rootfile_el = container_root.find(".//{urn:oasis:names:tc:opendocument:xmlns:container}rootfile")
+            if rootfile_el is None:
+                raise ValueError("Invalid EPUB: Missing rootfile in container.xml")
+            opf_path = rootfile_el.attrib["full-path"]
+        except Exception as e:
+            raise ValueError(f"Could not read EPUB container structure: {e}")
+
+        opf_dir = str(Path(opf_path).parent)
+        opf_data = z.read(opf_path)
+        opf_root = ET.fromstring(opf_data)
+
+        # Build manifest map (id -> href)
+        manifest = {}
+        for item in opf_root.findall(".//{*}item"):
+            manifest[item.attrib.get("id")] = item.attrib.get("href")
+
+        # Extract spine order
+        spine = [
+            item.attrib.get("idref")
+            for item in opf_root.findall(".//{*}itemref")
+            if item.attrib.get("idref")
+        ]
+
+        total_chapters = len(spine)
+        if target_chapter is not None:
+            if 1 <= target_chapter <= total_chapters:
+                spine = [spine[target_chapter - 1]]
+                print(f"📖 Extracting Chapter {target_chapter} of {total_chapters} from EPUB...")
+            else:
+                raise ValueError(f"Chapter {target_chapter} out of range (Book has {total_chapters} chapters).")
+        else:
+            print(f"📖 Reading all {total_chapters} chapters from EPUB...")
+
+        extracted_sections = []
+        for idx, item_id in enumerate(spine):
+            href = manifest.get(item_id)
+            if not href:
+                continue
+
+            full_href = f"{opf_dir}/{href}" if opf_dir and opf_dir != "." else href
+            # Normalize path inside zip
+            full_href = full_href.replace("\\", "/")
+
+            try:
+                raw_html = z.read(full_href).decode("utf-8", errors="ignore")
+                extractor = HTMLTextExtractor()
+                extractor.feed(raw_html)
+                clean_text = extractor.get_text()
+                if len(clean_text) > 40:  # Skip trivial copyright / blank pages
+                    chap_num = target_chapter if target_chapter is not None else (idx + 1)
+                    extracted_sections.append(f"=== CHAPTER {chap_num} ===\n{clean_text}")
+            except KeyError:
+                continue
+
+        return "\n\n".join(extracted_sections)
 
 
 def parse_page_range(range_str: Optional[str]) -> Optional[Tuple[int, int]]:
@@ -23,13 +104,15 @@ def parse_page_range(range_str: Optional[str]) -> Optional[Tuple[int, int]]:
 def load_source_document(
     file_path: str,
     page_range: Optional[str] = None,
+    chapter: Optional[int] = None,
     allow_suspicious: bool = False,
 ) -> Dict[str, Any]:
-    """Reads and parses source materials with security validation and token budgeting.
+    """Reads and parses source materials (MD, TXT, PDF, EPUB) with guardrails and token budgeting.
 
     Args:
         file_path: Path to target file
-        page_range: Optional string like '1-20' to extract specific chapters from large PDFs
+        page_range: Optional string like '1-20' for PDFs
+        chapter: Optional chapter number for EPUB books (e.g. 4)
         allow_suspicious: If True, continues with a warning when dangerous PDF tags are detected
 
     Returns:
@@ -40,9 +123,12 @@ def load_source_document(
     ext = path.suffix.lower()
     security_warnings = []
 
-    # 2. PDF Parsing & Malware Scan
-    if ext == ".pdf":
-        # Scan for PDF exploit tags
+    # 2. EPUB Books
+    if ext == ".epub":
+        content = extract_epub_content(path, target_chapter=chapter)
+
+    # 3. PDF Documents
+    elif ext == ".pdf":
         pdf_threats = DocumentGuardrails.scan_pdf_for_exploits(path)
         if pdf_threats:
             msg = f"Security Alert in '{path.name}':\n" + "\n".join(f" - {t}" for t in pdf_threats)
@@ -61,7 +147,6 @@ def load_source_document(
         reader = pypdf.PdfReader(str(path))
         total_pages = len(reader.pages)
 
-        # Apply Page Range or Budget Cap
         range_tuple = parse_page_range(page_range)
         if range_tuple:
             start_p, end_p = range_tuple
@@ -90,6 +175,7 @@ def load_source_document(
 
         content = "\n\n".join(extracted_chunks)
 
+    # 4. Markdown & Plain Text
     elif ext in [".md", ".txt", ".markdown"]:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
@@ -97,15 +183,13 @@ def load_source_document(
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
-    # 3. Prompt Injection Scan
+    # 5. Prompt Injection Scan
     injections = DocumentGuardrails.scan_text_for_prompt_injection(content)
     if injections:
         security_warnings.extend(injections)
         print(f"🛡️ Guardrails: Neutralized {len(injections)} potential prompt injection pattern(s).")
 
-    # Sanitize content enclosure
     sanitized_content = DocumentGuardrails.sanitize_untrusted_text(content)
-
     lines = content.splitlines()
     words = content.split()
     estimated_tokens = int(len(content) / 4)

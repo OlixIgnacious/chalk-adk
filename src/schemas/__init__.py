@@ -3,6 +3,8 @@ from src.schemas.lesson import (
     CheckpointQuestion,
     CurriculumOutline,
     HyperFrameScene,
+    LearnerFrictionAudit,
+    LearnerFrictionIssue,
     LessonSegment,
     LessonSpec,
     OutlineUnit,
@@ -22,6 +24,8 @@ __all__ = [
     "OutlineUnit",
     "CurriculumOutline",
     "VerificationIssue",
+    "LearnerFrictionIssue",
+    "LearnerFrictionAudit",
     "VerificationReport",
     "LessonSpec",
 ]

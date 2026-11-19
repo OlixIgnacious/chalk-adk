@@ -1,24 +1,26 @@
-"""GroundingAgent: Audits the generated LessonSpec against source material for factual fidelity."""
+"""Grounding & Learner Agent: Unified factual auditor and chalk-learner persona evaluation."""
 
 from src.config import generate_structured_output
 from src.schemas.lesson import LessonSpec, VerificationReport
 
-VERIFIER_PROMPT = """You are a rigorous factual auditor and pedagogical reviewer (equivalent to chalk-grounding and chalk-factcheck).
-Your job is to audit the generated LessonSpec against the original source document.
+VERIFIER_PROMPT = """You are a dual-specialist educational auditor performing two mandatory review passes:
+1. FACTUAL AUDITOR (chalk-factcheck + chalk-grounding)
+2. LEARNER ADVOCATE (chalk-learner persona evaluation)
 
-Audit Checklist:
-1. Fact-Check: Are there any fabricated claims, invented APIs, hallucinated statistics, or inaccurate technical statements in the narration or visual code?
-2. Question Quality & Correctness:
-   - Is the correct option for each checkpoint indisputably supported by the source?
-   - Are the distractors unmistakably incorrect according to the source?
-   - Are the feedback explanations accurate and helpful?
-3. Source Grounding:
-   - Does every segment's source excerpt actually exist in the source text?
-   - Are the citations faithful rather than taken out of context?
+--- PASS 1: FACTUAL AUDITOR ---
+- Verify that every technical statement, code construct, and diagram element is grounded in the source text.
+- Check checkpoint questions: Is the designated correct answer unequivocally true per the source? Are distractors unmistakably wrong?
+- Verify that every source citation excerpt is authentic and contextually accurate.
 
-Evaluation Rules:
-- If any claim directly contradicts the source or invents functionality not supported by it, flag it as a 'critical' or 'warning' issue.
-- If everything is accurate and properly grounded, set is_grounded = True and factual_score >= 0.95.
+--- PASS 2: CHALK-LEARNER PERSONA ---
+Simulate a motivated, intelligent learner encountering this topic for the first time. Audit for pedagogical friction:
+1. Undefined Jargon: Did a segment introduce domain jargon or acronyms without first establishing an intuitive definition?
+2. Abrupt Transitions: Does moving from Segment N to N+1 feel like a jarring leap with missing conceptual bridges?
+3. Cognitive Overload: Is the concept density per 45-second segment balanced, or is the learner bombarded with too many new mechanisms at once?
+4. Question Fairness: Does each checkpoint test genuine understanding of the segment's core takeaway, or is it trivial word-matching or an unfair trick?
+5. Pacing: Is the spoken narration pacing comfortable (~130-150 words per minute)?
+
+Fill in the `learner_audit` with `friction_score` (1.0 = smooth and clear, <0.7 = high friction), `cognitive_load`, and specific `friction_issues`.
 """
 
 
@@ -27,7 +29,7 @@ def run_verifier(
     lesson_spec: LessonSpec,
     provider: str = "gemini",
 ) -> VerificationReport:
-    """Runs the GroundingAgent audit on the LessonSpec."""
+    """Runs the unified Grounding and Chalk-Learner evaluation on the LessonSpec."""
     prompt = f"""{VERIFIER_PROMPT}
 
 === ORIGINAL SOURCE DOCUMENT ===
@@ -36,7 +38,8 @@ def run_verifier(
 === GENERATED LESSON SPECIFICATION ===
 {lesson_spec.model_dump_json(indent=2)}
 
-Perform a thorough audit and return the VerificationReport according to the schema.
+Perform both the factual audit and the chalk-learner persona review.
+Return the complete VerificationReport adhering strictly to the schema.
 """
 
     data = generate_structured_output(

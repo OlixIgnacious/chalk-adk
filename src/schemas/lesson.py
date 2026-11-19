@@ -1,7 +1,4 @@
-"""Pydantic schemas defining the data contract for Chalk-ADK Interactive Lessons and HyperFrames scenes.
-
-Ensures strict typing, structured LLM generation, and deterministic verification.
-"""
+"""Pydantic schemas defining the data contract for Chalk-ADK Interactive Lessons, HyperFrames scenes, and Learner audits."""
 
 from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
@@ -38,7 +35,7 @@ class HyperFrameScene(BaseModel):
         description="Optional scoped CSS rules or utility styling"
     )
     gsap_timeline: str = Field(
-        description="JavaScript GSAP animation timeline script (e.g., tl.from('#code-box', {opacity: 0, y: 20, duration: 1}).to('#line-1', {backgroundColor: '...', duration: 0.5}))"
+        description="JavaScript GSAP animation timeline script animating visual elements in sync with audio"
     )
 
 
@@ -118,7 +115,7 @@ class CurriculumOutline(BaseModel):
 
 
 class VerificationIssue(BaseModel):
-    """Issue flagged by GroundingAgent during fact-checking."""
+    """Factual issue flagged during fact-checking."""
     severity: Literal["critical", "warning", "info"] = "warning"
     location: str = Field(description="Segment or question ID where issue was found")
     claim: str = Field(description="The questionable statement or question element")
@@ -126,16 +123,43 @@ class VerificationIssue(BaseModel):
     suggested_fix: str = Field(description="Corrective action or revised wording")
 
 
+class LearnerFrictionIssue(BaseModel):
+    """Pedagogical friction issue flagged by the chalk-learner persona audit."""
+    segment_order: int = Field(description="Segment number where friction occurs")
+    issue_type: Literal[
+        "undefined_jargon",
+        "abrupt_transition",
+        "cognitive_overload",
+        "ambiguous_question",
+        "pacing_imbalance"
+    ] = Field(description="Category of pedagogical friction")
+    description: str = Field(description="Why a student would get confused or stumble here")
+    recommendation: str = Field(description="How to smooth out the explanation or rephrase")
+
+
+class LearnerFrictionAudit(BaseModel):
+    """Chalk-Learner audit evaluating pedagogical smoothness and cognitive friction."""
+    friction_score: float = Field(ge=0.0, le=1.0, description="Pedagogical clarity score (1.0 = seamless, <0.7 = friction)")
+    reading_level: str = Field(default="Intermediate Developer", description="Target comprehension level")
+    cognitive_load: Literal["low", "balanced", "high"] = Field(default="balanced", description="Assessment of concept density")
+    friction_issues: List[LearnerFrictionIssue] = Field(default_factory=list, description="Specific stumbling blocks")
+    pedagogical_summary: str = Field(description="Holistic evaluation from a learner's point of view")
+
+
 class VerificationReport(BaseModel):
-    """Quality and grounding audit produced by GroundingAgent."""
+    """Unified quality, grounding, and chalk-learner audit report."""
     is_grounded: bool = Field(description="True if all claims are backed by source")
     factual_score: float = Field(ge=0.0, le=1.0, description="Confidence score (0.0 - 1.0)")
-    issues: List[VerificationIssue] = Field(default_factory=list)
+    issues: List[VerificationIssue] = Field(default_factory=list, description="Factual issues")
+    learner_audit: Optional[LearnerFrictionAudit] = Field(
+        default=None,
+        description="Chalk-Learner pedagogical friction assessment"
+    )
     summary: str = Field(description="Brief assessment of pedagogical flow and accuracy")
 
 
 class LessonSpec(BaseModel):
-    """Full specification for compiling an interactive lesson and video scenes."""
+    """Full specification for compiling an interactive lesson, video scenes, and notebook."""
     lesson_id: str = Field(description="Kebab-case unique id (e.g., 'attention-mechanism-101')")
     title: str = Field(description="Main lesson title")
     subtitle: str = Field(description="Short engaging subtitle")
@@ -146,5 +170,5 @@ class LessonSpec(BaseModel):
     source_file: str = Field(description="Path to the primary source document used")
     verification_report: Optional[VerificationReport] = Field(
         default=None,
-        description="Verification audit from GroundingAgent"
+        description="Verification audit from GroundingAgent and LearnerAudit"
     )

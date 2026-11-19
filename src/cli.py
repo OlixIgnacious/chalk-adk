@@ -94,10 +94,27 @@ def main():
         action="store_true",
         help="Bypass security warnings for PDFs containing embedded action scripts or attachments",
     )
+    create_parser.add_argument(
+        "--notebook",
+        action="store_true",
+        help="Generate a companion interactive Jupyter follow-along notebook (.ipynb)",
+    )
+    create_parser.add_argument(
+        "--chapter",
+        type=int,
+        default=None,
+        help="Specific chapter number to extract from EPUB books (e.g. --chapter 4)",
+    )
 
     # Command: preview
     preview_parser = subparsers.add_parser("preview", help="Preview a compiled lesson in your default browser")
     preview_parser.add_argument("lesson_file", type=str, help="Path to lesson.html")
+
+    # Command: doctor
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Inspect local toolchain, Kokoro weights, Node, FFmpeg, and API keys",
+    )
 
     # Command: render-video
     video_parser = subparsers.add_parser(
@@ -137,7 +154,9 @@ def main():
             provider=args.provider,
             auto_approve=args.auto_approve,
             page_range=args.page_range,
+            chapter=args.chapter,
             allow_suspicious=args.allow_suspicious,
+            generate_notebook=args.notebook,
         )
 
         # 2. Compile to HTML & Audio
@@ -146,6 +165,9 @@ def main():
             output_root=args.output_dir,
             skip_tts=args.skip_tts,
         )
+        if args.notebook:
+            nb_path = html_path.parent / "notebook.ipynb"
+            print(f"📓 Follow-along notebook ready at: {nb_path}")
         print(f"\n💡 To open and view your lesson, run:\n   python -m src.cli preview {html_path}\n")
 
     elif args.command == "preview":
@@ -190,6 +212,10 @@ def main():
         else:
             print(f"🎬 Compiling all {len(spec.segments)} segments to MP4 via HyperFrames...")
             render_all_segments(spec, lesson_root=lesson_root, fps=args.fps)
+
+    elif args.command == "doctor":
+        from src.tools.doctor import run_doctor
+        run_doctor()
 
     else:
         parser.print_help()

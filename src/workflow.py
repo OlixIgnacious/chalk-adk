@@ -44,15 +44,31 @@ def render_human_review_gate(spec: LessonSpec) -> bool:
 
     if spec.verification_report:
         report = spec.verification_report
-        print("\n--- GROUNDING AUDIT REPORT ---")
+        print("\n--- GROUNDING & FACTUAL AUDIT ---")
         print(f"Grounded: {report.is_grounded} | Accuracy Score: {int(report.factual_score * 100)}%")
         if report.issues:
-            print(f"Issues / Warnings ({len(report.issues)}):")
+            print(f"Factual Warnings ({len(report.issues)}):")
             for issue in report.issues:
                 print(f"  [{issue.severity.upper()}] ({issue.location}): {issue.issue_description}")
-                print(f"    Suggested fix: {issue.suggested_fix}")
         else:
-            print("  ✓ Zero grounding issues detected. All claims verified against source.")
+            print("  ✓ Zero factual errors detected. All claims verified against source.")
+
+        # Chalk-Learner Persona Report
+        if report.learner_audit:
+            la = report.learner_audit
+            print("\n--- CHALK-LEARNER PERSONA AUDIT ---")
+            print(
+                f"Pedagogical Clarity: {int(la.friction_score * 100)}% | "
+                f"Cognitive Load: {la.cognitive_load.upper()} | Target: {la.reading_level}"
+            )
+            print(f"Assessment: {la.pedagogical_summary}")
+            if la.friction_issues:
+                print("Pedagogical Friction Stumbling Blocks:")
+                for fi in la.friction_issues:
+                    print(f"  • [Seg {fi.segment_order}] ({fi.issue_type}): {fi.description}")
+                    print(f"    Recommendation: {fi.recommendation}")
+            else:
+                print("  ✓ Smooth conceptual transitions. No cognitive friction points identified.")
 
     print("\n" + "-" * 70)
     try:
@@ -69,13 +85,16 @@ def run_lesson_pipeline(
     provider: str = "gemini",
     auto_approve: bool = False,
     page_range: Optional[str] = None,
+    chapter: Optional[int] = None,
     allow_suspicious: bool = False,
+    generate_notebook: bool = False,
 ) -> LessonSpec:
-    """Executes the full pipeline: Ingest -> Curate -> Write -> Verify -> Human Gate."""
+    """Executes the full pipeline: Ingest -> Curate -> Write -> Verify -> Human Gate -> Notebook."""
     print(f"📖 Step 1/4: Ingesting source document '{source_path}'...")
     source_doc = load_source_document(
         source_path,
         page_range=page_range,
+        chapter=chapter,
         allow_suspicious=allow_suspicious,
     )
     print(
@@ -111,6 +130,11 @@ def run_lesson_pipeline(
         if not approved:
             print("❌ Lesson build halted by user. You can edit the spec file and re-run.")
             return spec
+
+    if generate_notebook:
+        from src.compiler.notebook_generator import generate_companion_notebook
+        nb_path = out_path / spec.lesson_id / "notebook.ipynb"
+        generate_companion_notebook(spec, nb_path)
 
     print("✅ Lesson approved! Ready for compilation.")
     return spec
