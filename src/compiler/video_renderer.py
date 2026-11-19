@@ -63,8 +63,14 @@ HYPERFRAMES_COMPOSITION_TEMPLATE = """<!DOCTYPE html>
   </div>
 
   <script>
-    // Initialize HyperFrames GSAP timeline
-    const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
+    // Initialize HyperFrames GSAP timeline (paused for frame-by-frame deterministic seeking)
+    const tl = gsap.timeline({ paused: true, defaults: { ease: "power2.out" } });
+    
+    // Register timeline with HyperFrames headless renderer
+    window.__timelines = window.__timelines || {};
+    window.__timelines["default"] = tl;
+    window.__timelines["main"] = tl;
+    window.__timeline = tl;
     
     // Injected segment animation timeline
     {{ gsap_script }}

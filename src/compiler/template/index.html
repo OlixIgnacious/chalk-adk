@@ -484,6 +484,9 @@
 
     function onSegmentAudioEnded() {
       stopAudio();
+      if (currentTimeline) {
+        currentTimeline.progress(1.0);
+      }
       openCheckpointModal();
     }
 
@@ -494,8 +497,20 @@
         document.getElementById('audio-progress').style.width = `${pct}%`;
         document.getElementById('current-time').innerText = formatTime(audioEl.currentTime);
         document.getElementById('total-time').innerText = formatTime(audioEl.duration);
+      }
+    }
+
+    function seekAudio(event) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, clickX / rect.width));
+      const audioEl = document.getElementById('audio-player');
+      if (audioEl.duration) {
+        audioEl.currentTime = pct * audioEl.duration;
+        document.getElementById('audio-progress').style.width = `${pct * 100}%`;
+        document.getElementById('current-time').innerText = formatTime(audioEl.currentTime);
         if (currentTimeline) {
-          currentTimeline.progress(audioEl.currentTime / audioEl.duration);
+          currentTimeline.seek(pct * currentTimeline.duration());
         }
       }
     }
