@@ -101,3 +101,4 @@ class DocumentGuardrails:
             f"{sanitized}\n"
             "</UNTRUSTED_REFERENCE_DATA>"
         )
+

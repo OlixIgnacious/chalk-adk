@@ -29,6 +29,10 @@ class ModelConfig:
     # Rate Limiting / Pacing (Seconds between API requests)
     pacing_seconds: float = float(os.getenv("REQUEST_PACING_SECONDS", "3.0"))
 
+    # Audio & Narration (Kokoro TTS with voice blending)
+    tts_provider: str = os.getenv("TTS_PROVIDER", "kokoro")
+    tts_voice_id: str = os.getenv("TTS_VOICE_ID", "af_heart:0.7,af_bella:0.3")
+
 
 config = ModelConfig()
 

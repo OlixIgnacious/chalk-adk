@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from jinja2 import Template
 
+from src.config import config
 from src.schemas.lesson import LessonSpec
 from src.tools.tts_worker import generate_audio_for_segment, is_kokoro_available
 
@@ -23,18 +24,21 @@ def compile_lesson(spec: LessonSpec, output_root: str = "./dist", skip_tts: bool
     lesson_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Audio generation
-    kokoro_ready = is_kokoro_available()
-    if not skip_tts and kokoro_ready:
+    if not skip_tts:
         audio_dir.mkdir(exist_ok=True)
-        print(f"🎙️ Generating voiceover audio for {len(spec.segments)} segments with Kokoro-ONNX...")
+        print(f"🎙️ Generating voiceover audio with Kokoro-ONNX (Voice: '{config.tts_voice_id}')...")
         for seg in spec.segments:
             wav_name = f"seg-{seg.order}.wav"
             target_wav = audio_dir / wav_name
-            generated_path = generate_audio_for_segment(seg.narration, str(target_wav))
+            generated_path = generate_audio_for_segment(
+                seg.narration,
+                str(target_wav),
+                voice_id=config.tts_voice_id,
+            )
             if generated_path:
                 seg.audio_file = f"./audio/{wav_name}"
     else:
-        print("ℹ️ Audio generation skipped or Kokoro offline. HTML player will use Web Speech Synthesizer fallback.")
+        print("ℹ️ Audio generation skipped (--skip-tts). HTML player will use Web Speech Synthesizer fallback.")
 
     # 2. Render Template
     template_path = Path(__file__).parent / "template" / "index.html"
