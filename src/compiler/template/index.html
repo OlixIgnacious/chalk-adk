@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ lesson.title }} | Interactive Lesson</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Prism.js for syntax highlighting -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <!-- Mermaid.js for diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eef2ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glow-border { box-shadow: 0 0 15px rgba(99, 102, 241, 0.3); }
+    .highlight-line { background-color: rgba(99, 102, 241, 0.25); border-left: 3px solid #6366f1; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+
+  <!-- Top Navbar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow">
+        ⚡
+      </div>
+      <div>
+        <h1 class="text-sm font-semibold text-slate-200" id="header-title">{{ lesson.title }}</h1>
+        <p class="text-xs text-slate-400" id="header-subtitle">{{ lesson.subtitle }}</p>
+      </div>
+    </div>
+
+    <!-- Segment Stepper / Progress -->
+    <div class="flex items-center gap-2" id="stepper-container">
+      <!-- Injected via JS -->
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex items-center gap-3">
+      <button onclick="toggleGroundingDrawer()" class="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 flex items-center gap-1.5 transition">
+        <span>🔍</span>
+        <span>Grounding Audit</span>
+        <span class="px-1.5 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800" id="audit-score-pill">
+          100%
+        </span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+    <!-- Left Pane: Narration & Timeline -->
+    <section class="w-full md:w-5/12 border-r border-slate-800 p-6 flex flex-col bg-slate-950/60 overflow-y-auto">
+      <div class="mb-4">
+        <span class="text-xs font-semibold uppercase tracking-wider text-indigo-400" id="segment-badge">Segment 1</span>
+        <h2 class="text-xl font-bold text-slate-100 mt-1" id="segment-title">Loading...</h2>
+      </div>
+
+      <!-- Spoken Narration Box -->
+      <div class="flex-1 bg-slate-900/90 rounded-xl p-5 border border-slate-800/80 flex flex-col justify-between shadow-lg">
+        <div>
+          <div class="flex items-center justify-between mb-3 text-xs text-slate-400">
+            <span class="flex items-center gap-1.5 font-medium text-indigo-300">
+              <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+              Narration Voiceover
+            </span>
+            <span id="voice-status" class="text-[11px] text-slate-500">Audio Ready</span>
+          </div>
+          <p class="text-slate-300 text-sm md:text-base leading-relaxed" id="narration-text">
+            Loading spoken narration...
+          </p>
+        </div>
+
+        <!-- Audio Player Controls -->
+        <div class="mt-6 pt-4 border-t border-slate-800 flex flex-col gap-3">
+          <audio id="audio-player" class="hidden"></audio>
+          
+          <div class="flex items-center gap-4">
+            <button id="play-btn" onclick="toggleAudio()" class="w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-lg transition transform active:scale-95">
+              <span id="play-icon" class="text-lg">▶</span>
+            </button>
+            <div class="flex-1">
+              <div class="w-full bg-slate-800 rounded-full h-1.5 cursor-pointer relative overflow-hidden" onclick="seekAudio(event)">
+                <div id="audio-progress" class="bg-indigo-500 h-1.5 rounded-full w-0 transition-all duration-100"></div>
+              </div>
+              <div class="flex justify-between text-[11px] text-slate-400 mt-1">
+                <span id="current-time">0:00</span>
+                <span id="total-time">0:00</span>
+              </div>
+            </div>
+            <select id="playback-speed" onchange="changeSpeed(this.value)" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1">
+              <option value="1">1x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Segment Citation Box -->
+      <div class="mt-4 p-3.5 bg-slate-900/40 border border-slate-800/60 rounded-lg text-xs text-slate-400">
+        <span class="font-semibold text-slate-300">Source Anchor:</span>
+        <p class="mt-1 italic text-slate-400" id="segment-citation">"Citation loading..."</p>
+      </div>
+    </section>
+
+    <!-- Right Pane: Interactive Visual Board -->
+    <section class="flex-1 p-6 bg-slate-900/30 overflow-y-auto flex flex-col">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Interactive Board</span>
+        <span class="text-xs text-slate-500" id="visual-title-badge">Diagram / Code</span>
+      </div>
+
+      <div class="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-6 flex flex-col shadow-inner overflow-hidden" id="visual-board">
+        <!-- Rendered Code or Diagram will appear here -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Interactive Checkpoint Modal Overlay -->
+  <div id="checkpoint-overlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-indigo-500/40 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col gap-5 glow-border animate-fade-in">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            Checkpoint Gate
+          </span>
+          <span class="text-xs text-slate-400">Comprehension Verification</span>
+        </div>
+        <span class="text-xs text-slate-500">Must pass to advance</span>
+      </div>
+
+      <div>
+        <h3 class="text-lg font-semibold text-slate-100 leading-snug" id="checkpoint-prompt">
+          Prompt question loading...
+        </h3>
+      </div>
+
+      <!-- Checkpoint Options -->
+      <div class="flex flex-col gap-2.5" id="checkpoint-options">
+        <!-- Injected via JS -->
+      </div>
+
+      <!-- Explanation & Grounding Box -->
+      <div id="checkpoint-feedback" class="hidden rounded-lg p-4 text-xs transition-all">
+        <!-- Shows feedback and source citation -->
+      </div>
+
+      <!-- Action Footer -->
+      <div class="flex justify-end gap-3 pt-2">
+        <button id="next-segment-btn" onclick="advanceToNextSegment()" class="hidden px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-lg transition">
+          Continue to Next Segment →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grounding Audit Drawer -->
+  <aside id="grounding-drawer" class="fixed inset-y-0 right-0 w-96 bg-slate-900 border-l border-slate-800 shadow-2xl z-50 transform translate-x-full transition-transform duration-300 p-6 overflow-y-auto">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+      <div class="flex items-center gap-2">
+        <span class="text-base">🛡️</span>
+        <h3 class="text-sm font-bold text-slate-200">Grounding Audit Report</h3>
+      </div>
+      <button onclick="toggleGroundingDrawer()" class="text-slate-400 hover:text-slate-200 text-sm">✕</button>
+    </div>
+
+    <div class="flex flex-col gap-4 text-xs">
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <div class="text-slate-400 mb-1">Source Document</div>
+        <div class="font-mono text-slate-200 break-all" id="drawer-source-file">file.md</div>
+      </div>
+
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-slate-400">Factual Confidence</span>
+          <span class="font-bold text-emerald-400" id="drawer-confidence">100%</span>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-1" id="drawer-audit-summary">
+          Audited by GroundingAgent against the source document.
+        </p>
+      </div>
+
+      <div>
+        <h4 class="font-semibold text-slate-300 mb-2">Segment Citations</h4>
+        <div class="flex flex-col gap-2" id="drawer-citations">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Injected Data & Application Logic -->
+  <script>
+    const LESSON_SPEC = {{ lesson_json | safe }};
+
+    let currentSegmentIndex = 0;
+    let isPlaying = false;
+    let synth = window.speechSynthesis;
+    let currentUtterance = null;
+    let answeredCorrectly = false;
+
+    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+
+    function initLesson() {
+      document.getElementById('header-title').innerText = LESSON_SPEC.title;
+      document.getElementById('header-subtitle').innerText = LESSON_SPEC.subtitle;
+      document.getElementById('drawer-source-file').innerText = LESSON_SPEC.source_file;
+      
+      if (LESSON_SPEC.verification_report) {
+        const score = Math.round(LESSON_SPEC.verification_report.factual_score * 100);
+        document.getElementById('audit-score-pill').innerText = `${score}% Grounded`;
+        document.getElementById('drawer-confidence').innerText = `${score}%`;
+        document.getElementById('drawer-audit-summary').innerText = LESSON_SPEC.verification_report.summary;
+      }
+
+      renderStepper();
+      loadSegment(0);
+      populateDrawerCitations();
+    }
+
+    function renderStepper() {
+      const container = document.getElementById('stepper-container');
+      container.innerHTML = '';
+      LESSON_SPEC.segments.forEach((seg, idx) => {
+        const dot = document.createElement('button');
+        dot.className = `w-7 h-7 rounded-full text-xs font-semibold transition flex items-center justify-center ${
+          idx === currentSegmentIndex 
+            ? 'bg-indigo-600 text-white shadow-lg' 
+            : idx < currentSegmentIndex 
+              ? 'bg-emerald-950 text-emerald-400 border border-emerald-700' 
+              : 'bg-slate-800 text-slate-400 border border-slate-700'
+        }`;
+        dot.innerText = idx + 1;
+        dot.title = seg.title;
+        dot.onclick = () => {
+          if (idx <= currentSegmentIndex || answeredCorrectly) {
+            loadSegment(idx);
+          }
+        };
+        container.appendChild(dot);
+      });
+    }
+
+    function loadSegment(index) {
+      currentSegmentIndex = index;
+      answeredCorrectly = false;
+      stopAudio();
+
+      const seg = LESSON_SPEC.segments[index];
+      document.getElementById('segment-badge').innerText = `Segment ${index + 1} of ${LESSON_SPEC.segments.length}`;
+      document.getElementById('segment-title').innerText = seg.title;
+      document.getElementById('narration-text').innerText = seg.narration;
+
+      // Citations
+      if (seg.source_citations && seg.source_citations.length > 0) {
+        document.getElementById('segment-citation').innerText = `"${seg.source_citations[0].excerpt}"`;
+      } else {
+        document.getElementById('segment-citation').innerText = "Verified by GroundingAgent";
+      }
+
+      // Visuals
+      renderVisualBoard(seg.visuals);
+
+      // Audio setup
+      setupAudioForSegment(seg);
+
+      renderStepper();
+    }
+
+    function renderVisualBoard(visuals) {
+      const board = document.getElementById('visual-board');
+      board.innerHTML = '';
+
+      if (!visuals || visuals.length === 0) {
+        board.innerHTML = '<p class="text-slate-500 text-sm">No visual directives for this segment.</p>';
+        return;
+      }
+
+      visuals.forEach(v => {
+        document.getElementById('visual-title-badge').innerText = v.title || v.kind.toUpperCase();
+        
+        if (v.kind === 'diagram') {
+          const mDiv = document.createElement('div');
+          mDiv.className = 'mermaid w-full h-full flex items-center justify-center';
+          mDiv.innerText = v.content;
+          board.appendChild(mDiv);
+          mermaid.run({ nodes: [mDiv] });
+        } else if (v.kind === 'code') {
+          const pre = document.createElement('pre');
+          pre.className = `rounded-lg !bg-slate-950 border border-slate-800 p-4 overflow-x-auto text-sm w-full`;
+          const code = document.createElement('code');
+          code.className = `language-${v.language || 'python'}`;
+          code.innerText = v.content;
+          pre.appendChild(code);
+          board.appendChild(pre);
+          Prism.highlightElement(code);
+        } else {
+          const div = document.createElement('div');
+          div.className = 'prose prose-invert max-w-none text-slate-200 text-sm space-y-2';
+          div.innerHTML = v.content.replace(/\n/g, '<br/>');
+          board.appendChild(div);
+        }
+      });
+    }
+
+    function setupAudioForSegment(seg) {
+      const audioEl = document.getElementById('audio-player');
+      document.getElementById('audio-progress').style.width = '0%';
+      document.getElementById('current-time').innerText = '0:00';
+
+      if (seg.audio_file) {
+        audioEl.src = seg.audio_file;
+        document.getElementById('voice-status').innerText = 'Kokoro TTS (Local)';
+        audioEl.ontimeupdate = updateAudioProgress;
+        audioEl.onended = onSegmentAudioEnded;
+      } else {
+        audioEl.src = '';
+        document.getElementById('voice-status').innerText = 'Web Speech Synthesizer';
+        const wordCount = seg.narration.split(' ').length;
+        const estSeconds = Math.round(wordCount / 2.5);
+        document.getElementById('total-time').innerText = formatTime(estSeconds);
+      }
+    }
+
+    function toggleAudio() {
+      const seg = LESSON_SPEC.segments[currentSegmentIndex];
+      const audioEl = document.getElementById('audio-player');
+
+      if (isPlaying) {
+        stopAudio();
+      } else {
+        if (seg.audio_file) {
+          audioEl.play();
+          isPlaying = true;
+          document.getElementById('play-icon').innerText = '⏸';
+        } else {
+          // Fallback Web Speech Synthesis
+          if (synth.speaking) synth.cancel();
+          currentUtterance = new SpeechSynthesisUtterance(seg.narration);
+          currentUtterance.rate = parseFloat(document.getElementById('playback-speed').value);
+          currentUtterance.onend = onSegmentAudioEnded;
+          synth.speak(currentUtterance);
+          isPlaying = true;
+          document.getElementById('play-icon').innerText = '⏸';
+        }
+      }
+    }
+
+    function stopAudio() {
+      const audioEl = document.getElementById('audio-player');
+      audioEl.pause();
+      if (synth.speaking) synth.cancel();
+      isPlaying = false;
+      document.getElementById('play-icon').innerText = '▶';
+    }
+
+    function onSegmentAudioEnded() {
+      stopAudio();
+      openCheckpointModal();
+    }
+
+    function updateAudioProgress() {
+      const audioEl = document.getElementById('audio-player');
+      if (audioEl.duration) {
+        const pct = (audioEl.currentTime / audioEl.duration) * 100;
+        document.getElementById('audio-progress').style.width = `${pct}%`;
+        document.getElementById('current-time').innerText = formatTime(audioEl.currentTime);
+        document.getElementById('total-time').innerText = formatTime(audioEl.duration);
+      }
+    }
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function changeSpeed(val) {
+      const audioEl = document.getElementById('audio-player');
+      audioEl.playbackRate = parseFloat(val);
+      if (currentUtterance) currentUtterance.rate = parseFloat(val);
+    }
+
+    function openCheckpointModal() {
+      const seg = LESSON_SPEC.segments[currentSegmentIndex];
+      const cp = seg.checkpoint;
+
+      document.getElementById('checkpoint-prompt').innerText = cp.prompt;
+      const optsContainer = document.getElementById('checkpoint-options');
+      optsContainer.innerHTML = '';
+
+      const feedback = document.getElementById('checkpoint-feedback');
+      feedback.className = 'hidden';
+      document.getElementById('next-segment-btn').classList.add('hidden');
+
+      cp.options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'w-full text-left p-3.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-xs md:text-sm text-slate-200 transition flex items-start gap-3';
+        btn.innerHTML = `
+          <span class="w-6 h-6 rounded-md bg-slate-700 text-slate-300 font-bold flex items-center justify-center shrink-0 text-xs">${opt.id}</span>
+          <span class="flex-1">${opt.text}</span>
+        `;
+        btn.onclick = () => selectCheckpointOption(opt, btn, cp);
+        optsContainer.appendChild(btn);
+      });
+
+      document.getElementById('checkpoint-overlay').classList.remove('hidden');
+    }
+
+    function selectCheckpointOption(option, btn, cp) {
+      const feedback = document.getElementById('checkpoint-feedback');
+      feedback.classList.remove('hidden');
+
+      if (option.is_correct) {
+        btn.className = 'w-full text-left p-3.5 rounded-xl bg-emerald-950/70 border border-emerald-500 text-emerald-200 text-xs md:text-sm flex items-start gap-3';
+        feedback.className = 'rounded-xl p-4 bg-emerald-950/50 border border-emerald-800 text-emerald-200 text-xs space-y-1.5';
+        feedback.innerHTML = `
+          <div class="font-bold flex items-center gap-1.5 text-emerald-300">✓ Correct!</div>
+          <p>${option.explanation}</p>
+          <div class="mt-2 text-[11px] text-emerald-400 italic">Source Grounding: "${cp.source_grounding.excerpt}"</div>
+        `;
+        answeredCorrectly = true;
+        document.getElementById('next-segment-btn').classList.remove('hidden');
+      } else {
+        btn.className = 'w-full text-left p-3.5 rounded-xl bg-rose-950/70 border border-rose-500 text-rose-200 text-xs md:text-sm flex items-start gap-3';
+        feedback.className = 'rounded-xl p-4 bg-rose-950/50 border border-rose-800 text-rose-200 text-xs space-y-1.5';
+        feedback.innerHTML = `
+          <div class="font-bold flex items-center gap-1.5 text-rose-300">✗ Not quite</div>
+          <p>${option.explanation}</p>
+        `;
+      }
+    }
+
+    function advanceToNextSegment() {
+      document.getElementById('checkpoint-overlay').classList.add('hidden');
+      if (currentSegmentIndex + 1 < LESSON_SPEC.segments.length) {
+        loadSegment(currentSegmentIndex + 1);
+      } else {
+        alert("🎉 Congratulations! You have completed the entire interactive lesson.");
+      }
+    }
+
+    function toggleGroundingDrawer() {
+      const drawer = document.getElementById('grounding-drawer');
+      drawer.classList.toggle('translate-x-full');
+    }
+
+    function populateDrawerCitations() {
+      const container = document.getElementById('drawer-citations');
+      container.innerHTML = '';
+      LESSON_SPEC.segments.forEach(seg => {
+        const item = document.createElement('div');
+        item.className = 'p-2.5 bg-slate-950 rounded border border-slate-800/80 text-[11px]';
+        const excerpt = seg.source_citations[0] ? seg.source_citations[0].excerpt : "Verified factual claim";
+        item.innerHTML = `
+          <div class="font-semibold text-indigo-400">${seg.title}</div>
+          <p class="text-slate-400 italic mt-1">"${excerpt}"</p>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    window.onload = initLesson;
+  </script>
+</body>
+</html>
+
